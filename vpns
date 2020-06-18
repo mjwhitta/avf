@@ -1,0 +1,752 @@
+#!/usr/bin/env bash
+
+# shellcheck disable=SC2010
+# shellcheck disable=SC2086
+
+### Helpers begin
+check_deps() {
+    local missing
+    for d in "${deps[@]}"; do
+        if [[ -z $(command -v "$d") ]]; then
+            # Force absolute path
+            if [[ ! -e "/$d" ]]; then
+                err "$d was not found"
+                missing="true"
+            fi
+        fi
+    done; unset d
+    [[ -z $missing ]] || exit 128
+}
+err() { echo -e "${color:+\e[31m}[!] $*\e[0m"; }
+errx() { err "${*:2}"; exit "$1"; }
+good() { echo -e "${color:+\e[32m}[+] $*\e[0m"; }
+info() { echo -e "${color:+\e[37m}[*] $*\e[0m"; }
+long_opt() {
+    local arg shift="0"
+    case "$1" in
+        "--"*"="*) arg="${1#*=}"; [[ -n $arg ]] || usage 127 ;;
+        *) shift="1"; shift; [[ $# -gt 0 ]] || usage 127; arg="$1" ;;
+    esac
+    echo "$arg"
+    return $shift
+}
+subinfo() { echo -e "${color:+\e[36m}[=] $*\e[0m"; }
+warn() { echo -e "${color:+\e[33m}[-] $*\e[0m"; }
+### Helpers end
+
+example() {
+    cat <<EOF
+{
+  "obfsproxy": [
+    {
+      "from": "0.0.0.0:522",
+      "to": "192.168.1.15:443"
+    },
+    {
+      "from": "0.0.0.0:728",
+      "to": "192.168.1.15:443"
+    }
+  ],
+  "openvpn": [
+    {
+      "clients": [
+        "user1"
+      ],
+      "dns": "8.8.8.8",
+      "endpoint": "vpn.your.tld",
+      "iface": "eth0",
+      "pool": {
+        "ips": "192.168.1.16",
+        "mask": "255.255.255.248"
+      },
+      "ports": [
+        {
+          "port": 443,
+          "proto": "tcp"
+        },
+        {
+          "port": 5353,
+          "proto": "udp"
+        }
+      ],
+      "routes": [
+        {
+          "ips": "192.168.0.0",
+          "mask": "255.255.0.0"
+        }
+      ]
+    }
+  ],
+  "wireguard": {
+    "wg0": {
+      "clients": [
+        {
+          "name": "user1",
+          "ip": "10.0.0.2"
+        },
+        {
+          "name": "user2",
+          "ip": "10.0.0.3"
+        }
+      ],
+      "dns": "8.8.8.8",
+      "endpoint": "vpn.your.tld",
+      "ip": "10.0.0.1/24",
+      "port": 443,
+      "routes": [
+        "If nothing is provided, all traffic goes thru tunnel",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16"
+      ]
+    }
+  }
+}
+EOF
+}
+
+gen_iptables() {
+    local line
+    local port
+    local -a ports
+
+    cat <<EOF
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+:HARDPASS - [0:0]
+:SYNFLOOD - [0:0]
+:TCP - [0:0]
+:UDP - [0:0]
+# Allow loopback
+-A INPUT -i lo -j ACCEPT
+# Allow established
+-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+# Drop invalid
+-A INPUT -m conntrack --ctstate INVALID -j DROP
+# Allow ping
+-A INPUT -p icmp -m icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
+# Jump to tcp table for new tcp
+-A INPUT -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m conntrack --ctstate NEW -j TCP
+# Jump to udp table for new udp
+-A INPUT -p udp -m conntrack --ctstate NEW -j UDP
+# Otherwise reject
+-A INPUT -j HARDPASS
+# Allow established
+-A FORWARD -m conntrack --ctstate DNAT,ESTABLISHED,RELATED -j ACCEPT
+# Drop invalid
+-A FORWARD -m conntrack --ctstate INVALID -j DROP
+# Reject forwarding the wrong way
+-A FORWARD -i eth+ -j HARDPASS
+# Forwading rules for OpenVPN and Wireguard (may need to adjust eth+)
+-A FORWARD -i tun+ -o tun+ -j HARDPASS
+-A FORWARD -i wg+ -o wg+ -j HARDPASS
+-A FORWARD -i tun+ -o eth+ -j ACCEPT
+-A FORWARD -i wg+ -o eth+ -j ACCEPT
+# Otherwise reject
+-A FORWARD -j HARDPASS
+-A HARDPASS -p tcp -j REJECT --reject-with tcp-reset
+-A HARDPASS -p udp -j REJECT --reject-with icmp-port-unreachable
+-A HARDPASS -j REJECT --reject-with icmp-proto-unreachable
+# Protect from SYN flood
+-A SYNFLOOD -m limit --limit 64/min --limit-burst 64 -j RETURN
+-A SYNFLOOD -j HARDPASS
+# Check for SYN flood
+-A TCP -j SYNFLOOD
+# Allow TCP ports
+$(
+    ports+=("22")
+
+    if [[ -n $(json_get "obfsproxy") ]]; then
+        while read -r port; do
+            ports+=("${port##*:}")
+        done < <(json_get "obfsproxy[]|.from"); unset port
+    fi
+
+    if [[ -n $(json_get "openvpn") ]]; then
+        while read -r line; do
+            while read -r port; do
+                case "$(json_get "proto" "$port")" in
+                    "tcp") ports+=("$(json_get "port" "$port")") ;;
+                esac
+            done < <(json_get "ports[]" "$line"); unset port
+        done < <(json_get "openvpn[]"); unset line
+
+    fi
+
+    if [[ ${#ports[@]} -gt 0 ]]; then
+        cat <<EOL
+-A TCP -p tcp -m multiport --dports $(join "," ${ports[@]}) -j ACCEPT
+EOL
+    fi
+
+    unset ports
+)
+# Allow UDP ports
+$(
+    if [[ -n $(json_get "openvpn") ]]; then
+        while read -r line; do
+            while read -r port; do
+                case "$(json_get "proto" "$port")" in
+                    "udp") ports+=("$(json_get "port" "$port")") ;;
+                esac
+            done < <(json_get "ports[]" "$line"); unset port
+        done < <(json_get "openvpn[]"); unset line
+
+    fi
+
+    if [[ -n $(json_get "wireguard") ]]; then
+        while read -r port; do
+            ports+=("$port")
+        done < <(json_get "wireguard[]|.port"); unset port
+    fi
+
+    if [[ ${#ports[@]} -gt 0 ]]; then
+        cat <<EOL
+-A UDP -p udp -m multiport --dports $(join "," ${ports[@]}) -j ACCEPT
+EOL
+    fi
+
+    unset ports
+)
+COMMIT
+*nat
+:PREROUTING ACCEPT [0:0]
+:INPUT ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+:POSTROUTING ACCEPT [0:0]
+# Masquerade for OpenVPN and Wireguard (may need to adjust eth+)
+-A POSTROUTING -o eth+ -j MASQUERADE
+COMMIT
+*raw
+:PREROUTING ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+-A PREROUTING -m rpfilter -j ACCEPT
+-A PREROUTING -j DROP
+COMMIT
+EOF
+}
+
+join() { local IFS="$1"; shift; echo "$*"; }
+
+json_get() {
+    if [[ $# -eq 1 ]]; then
+        jq -cMrS ".$1" "$conf" | sed -r "s/^null$//"
+    elif [[ $# -eq 2 ]]; then
+        jq -cMrS ".$1" <<<"$2" | sed -r "s/^null$//"
+    fi
+}
+
+openvpn_gen_client() {
+    local client="$1"
+    local config="$2"
+    local endpoint="$(json_get "endpoint" "$config")"
+    local port="$(json_get "port" "$3")"
+    local proto="$(json_get "proto" "$3")"
+    local srv="$proto$port"
+
+    file="${client}_$srv"
+
+    if [[ -f /etc/openvpn/clients/$file.ovpn ]] &&
+       [[ -z $force ]]; then
+        warn "Client $file already exists. Use --force to overwrite."
+        return
+    fi
+
+    mkdir -p /etc/openvpn/clients
+
+    certify -c "$client" -p /etc/openvpn/pki
+
+    cat >"/etc/openvpn/clients/$file.ovpn" <<EOF
+<ca>
+$(cat /etc/openvpn/pki/ca/ca.cert.pem)
+</ca>
+<cert>
+$(cat "/etc/openvpn/pki/certs/$client.client.cert.pem")
+</cert>
+client
+dev tun
+group nobody
+<key>
+$(cat "/etc/openvpn/pki/private/$client.client.key.pem")
+</key>
+key-direction 1
+mute-replay-warnings
+nobind
+persist-key
+persist-tun
+proto $proto
+remote $endpoint $port
+remote-cert-tls server
+resolv-retry infinite
+<tls-auth>
+$(cat "/etc/openvpn/ta/$srv.key")
+</tls-auth>
+user nobody
+verb 3
+EOF
+
+    chown -R root:root /etc/openvpn
+    chmod -R u+rwX,go-rwx /etc/openvpn
+}
+
+openvpn_gen_server() {
+    local config="$1"
+    local dns="$(json_get "dns" "$config")"
+    local endpoint="$(json_get "endpoint" "$config")"
+    local iface="$(json_get "iface" "$config")"
+    local ip
+    local pool="$(json_get "pool|join(\"/\")" "$config")"
+    local pool_ip
+    local pool_mask
+    local port="$(json_get "port" "$2")"
+    local proto="$(json_get "proto" "$2")"
+    local route
+    local -a routes
+    local srv="$proto$port"
+
+    if [[ -f /etc/openvpn/$srv.conf ]] && [[ -z $force ]]; then
+        warn "Server $srv already exists. Use --force to overwrite."
+        return
+    fi
+
+    ip="$(
+        ip -o a show dev "$iface" | grep -im 1 -oPs "inet\s+\K[^/]+"
+    )"
+
+    pool_ip="${pool%%/*}"
+    pool_mask="${pool##*/}"
+
+    while read -r route; do
+        routes+=("--route $(json_get "|join(\"/\")" "$route")")
+    done < <(json_get "routes[]" "$config"); unset route
+
+    mkdir -p /etc/openvpn/{ipp,pki,ta}
+
+    certify -d -p /etc/openvpn/pki "$endpoint"
+
+    if [[ ! -f /etc/openvpn/ta/$srv.key ]]; then
+        openvpn --genkey --secret "/etc/openvpn/ta/$srv.key"
+    fi
+
+    cat >"/etc/openvpn/$srv.conf" <<EOF
+ca /etc/openvpn/pki/ca/ca.cert.pem
+cert /etc/openvpn/pki/certs/$endpoint.cert.pem
+client-to-client
+compress lz4-v2
+dev tun
+dh /etc/openvpn/pki/dh/dh2048.pem
+$([[ "$proto" == "udp" ]] || echo -n "#")explicit-exit-notify 1
+group nobody
+ifconfig-pool-persist /etc/openvpn/ipp/$srv.txt
+keepalive 32 128
+key /etc/openvpn/pki/private/$endpoint.key.pem
+local $ip
+log-append /var/log/openvpn.log
+max-clients 2
+persist-key
+persist-tun
+port $port
+proto $proto
+push "compress lz4-v2"
+${dns:+push 'dhcp-option DNS $dns'}
+$(
+    for route in "${routes[@]}"; do
+        echo "push 'route ${route%%/*} ${route##*/}'"
+    done; unset route
+)
+server $pool_ip $pool_mask
+status /var/log/openvpn-status.log
+tls-auth /etc/openvpn/ta/$srv.key 0
+user nobody
+verb 3
+EOF
+
+    chown -R root:root /etc/openvpn
+    chmod -R u+rwX,go-rwx /etc/openvpn
+
+    ln -fs /etc/init.d/openvpn "/etc/init.d/openvpn.$srv"
+}
+
+qr() {
+    local client="$2"
+    local file
+    local iface="$1"
+    local port="$(json_get "wireguard.$iface.port")"
+
+    [[ -n $port ]] || return
+
+    file="/etc/wireguard/$iface/${client}$port.conf"
+    if [[ -f "$file" ]]; then
+        info "Full tunnel:"
+        qrencode -r "$file" -t ansiutf8
+    fi
+
+    file="/etc/wireguard/$iface/${client}${port}split.conf"
+    if [[ -f "$file" ]]; then
+        info "Split tunnel:"
+        qrencode -r "$file" -t ansiutf8
+    fi
+}
+
+rebuild() {
+    if [[ ! -f /etc/openvpn/pki/certifyme.conf ]]; then
+        mkdir -p /etc/openvpn/pki
+        certify -s | grep -Ps "^#\s" | grep -iv "adjust" | \
+            sed -r "s/^#\s//g" >/etc/openvpn/pki/certifyme.conf
+    fi
+
+    # Setup OpenVPN
+    if [[ -n $(json_get "openvpn") ]]; then
+        while read -r line; do
+            while read -r port; do
+                setup_openvpn "$line" "$port"
+            done < <(json_get "ports[]" "$line"); unset port
+        done < <(json_get "openvpn[]"); unset line
+    fi
+
+    # Setup Wireguard
+    if [[ -n $(json_get "wireguard") ]]; then
+        while read -r iface; do
+            setup_wireguard "$iface" "$(json_get "wireguard.$iface")"
+        done < <(json_get "wireguard|keys[]"); unset iface
+    fi
+}
+
+setup_openvpn() {
+    local client
+    local config="$1"
+    local port="$2"
+
+    # Setup OpenVPN server
+    openvpn_gen_server "$config" "$port"
+
+    # Setup OpenVPN clients
+    while read -r client; do
+        openvpn_gen_client "$client" "$config" "$port"
+    done < <(json_get "clients[]" "$line"); unset client
+}
+
+setup_wireguard() {
+    local client
+    local config="$2"
+    local iface="$1"
+    local ip
+    local name
+
+    # Setup Wireguard server
+    wg_gen_server "$config" "$iface"
+
+    # Setup Wireguard clients
+    while read -r client; do
+        ip="$(json_get "ip" "$client")"
+        name="$(json_get "name" "$client")"
+        wg_gen_client "$config" "$iface" "$ip" "$name"
+    done < <(json_get "clients[]" "$config"); unset client
+}
+
+start() {
+    local line
+    local port
+    local srv
+
+    case "$(rc-service local status)" in
+        *"started"*) rc-service local stop ;;
+    esac
+
+    cat >/etc/local.d/obfs3proxy.start <<EOF
+#!/usr/bin/env bash
+
+json_get() {
+    if [[ \$# -eq 1 ]]; then
+        jq -cMrS ".\$1" "$conf" | sed -r "s/^null$//"
+    elif [[ \$# -eq 2 ]]; then
+        jq -cMrS ".\$1" <<<"\$2" | sed -r "s/^null$//"
+    fi
+}
+
+if [[ -n \$(json_get "obfsproxy") ]]; then
+    while read -r line; do
+        from="\$(json_get "from" "\$line")"
+        to="\$(json_get "to" "\$line")"
+        "$HOME/.local/bin/obfsproxy" --no-log obfs3 --dest "\$to" \\
+            server "\$from" &
+    done < <(json_get "obfsproxy[]")
+fi
+EOF
+
+    cat >/etc/local.d/obfs3proxy.stop <<EOF
+#!/usr/bin/env bash
+
+pkill -f obfspoxy
+EOF
+
+    chmod 755 /etc/local.d/obfs3proxy.{start,stop}
+
+    cat >/etc/local.d/wireguard.start <<EOF
+#!/usr/bin/env bash
+
+json_get() { jq -cMrS ".\$1" "$conf" | sed -r "s/^null$//"; }
+
+if [[ -n \$(json_get "wireguard") ]]; then
+    while read -r iface; do
+        wg-quick up \$iface
+    done < <(json_get "wireguard|keys[]")
+fi
+EOF
+
+    cat >/etc/local.d/wireguard.stop <<EOF
+#!/usr/bin/env bash
+
+json_get() { jq -cMrS ".\$1" "$conf" | sed -r "s/^null$//"; }
+
+if [[ -n \$(json_get "wireguard") ]]; then
+    while read -r iface; do
+        wg-quick down \$iface
+    done < <(json_get "wireguard|keys[]")
+fi
+EOF
+
+    chmod 755 /etc/local.d/wireguard.{start,stop}
+
+    case "$(rc-update show | grep "local")" in
+        *"default"*);;
+        *) rc-update add local ;;
+    esac
+    rc-service local restart
+
+    # Start OpenVPN services
+    if [[ -n $(json_get "openvpn") ]]; then
+        while read -r line; do
+            while read -r port; do
+                srv="$(json_get "proto" "$port")"
+                srv+="$(json_get "port" "$port")"
+                rc-update add "openvpn.$srv"
+                rc-service "openvpn.$srv" start
+            done < <(json_get "ports[]" "$line"); unset port
+        done < <(json_get "openvpn[]"); unset line
+    fi
+}
+
+stop() {
+    local service
+    local teardown="$1"
+
+    case "$(rc-service local status)" in
+        *"started"*) rc-service local stop ;;
+    esac
+    rm -f /etc/local.d/obfs3proxy.{start,stop}
+    rm -f /etc/local.d/wireguard.{start,stop}
+    case "$(rc-update show | grep "local")" in
+        *"default"*) rc-service local start ;;
+    esac
+
+    # Remove OpenVPN services
+    while read -r service; do
+        rc-service "$service" stop
+        rc-update del "$service"
+        [[ -z "$teardown" ]] || rm -f "/etc/init.d/$service"
+    done < <(ls -l /etc/init.d | grep -ioPs "openvpn.\S+")
+    unset service
+}
+
+usage() {
+    cat <<EOF
+Usage: ${0##*/} [OPTIONS] <action> [args]
+
+Manage all OpenVPN and Wireguard configs.
+
+Options:
+    -f, --force    Overwrite existing configs
+    -h, --help     Display this help message
+    --no-color     Disable colorized output
+
+Actions:
+    example             Generate an example config
+    iptables            Generate iptables rules
+    qr [iface] [client] Generate qrcodes for wireguard client
+    setup               Build all VPN configs
+    teardown            Erase all VPN configs
+
+Quick Start:
+
+1. Edit $HOME/.config/vpns.conf
+    - See "vpns example" for an example
+
+2. Create and edit /etc/iptables/iptables.rules to open additional
+   ports (SSH)
+    - vpns iptables >/etc/iptables/iptables.rules
+    - iptables-restore </etc/iptables/iptables.rules
+    - iptables-save >/etc/iptables/rules-save
+
+3. Run "vpns setup" to generate all VPN configs
+
+4. Run "vpns teardown" to start over and repeat steps 1 through 3 as
+needed.
+
+EOF
+    exit "$1"
+}
+
+wg_gen_client() {
+    local config="$1"
+    local dns="$(json_get "dns" "$config")"
+    local endpoint="$(json_get "endpoint" "$config")"
+    local file
+    local iface="$2"
+    local ip="$3"
+    local name="$4"
+    local port="$(json_get "port" "$config")"
+    local priv
+    local psk
+    local pub
+    local route
+    local server="$endpoint:$port"
+    local subnet
+    local tmp="$(json_get "ip" "$config")"
+
+    file="/etc/wireguard/$iface/${name}$port.conf"
+
+    if [[ -f "$file" ]] && [[ -z $force ]]; then
+        warn "Client $name already exists. Use --force to overwrite."
+        return
+    fi
+
+    priv="$(wg genkey)"
+    psk="$(wg genpsk)"
+    pub="$(wg pubkey <<<"$priv")"
+    subnet="$(busybox ipcalc -n "$tmp" | grep -ioPs "network.\K.+")"
+    subnet+="/${tmp##*/}"
+
+    cat >>"/etc/wireguard/$iface.conf" <<EOF
+
+[Peer]
+AllowedIPs = $ip/32
+PresharedKey = $psk
+PublicKey = $pub
+EOF
+
+    mkdir -p "/etc/wireguard/$iface"
+
+    cat >"$file" <<EOF
+[Interface]
+Address = $ip/32
+DNS = $dns
+PrivateKey = $priv
+
+[Peer]
+AllowedIPs = 0.0.0.0/0
+Endpoint = $server
+PersistentKeepalive = 25
+PresharedKey = $psk
+PublicKey = $(
+    grep -ioPs "PrivateKey\s*\=\s*\K.+" \
+    "/etc/wireguard/$iface.conf" | wg pubkey
+)
+EOF
+
+    if [[ -n $(json_get "routes" "$config") ]]; then
+        file="/etc/wireguard/$iface/${name}${port}split.conf"
+        cat >"$file" <<EOF
+[Interface]
+Address = $ip/32
+DNS = $dns
+PrivateKey = $priv
+
+[Peer]
+AllowedIPs = $subnet,$(json_get "routes|join(\",\")" "$config")
+Endpoint = $server
+PersistentKeepalive = 25
+PresharedKey = $psk
+PublicKey = $(
+    grep -ioPs "PrivateKey\s*\=\s*\K.+" \
+    "/etc/wireguard/$iface.conf" | wg pubkey
+)
+EOF
+    fi
+
+    chown -R root:root /etc/wireguard
+    chmod -R u+rwX,go-rwx /etc/wireguard
+}
+
+wg_gen_server() {
+    local config="$1"
+    local iface="$2"
+    local ip="$(json_get "ip" "$config")"
+    local port="$(json_get "port" "$config")"
+    local priv
+
+    if [[ -f /etc/wireguard/$iface.conf ]] && [[ -z $force ]]; then
+        warn "Server $iface already exists. Use --force to overwrite."
+        return
+    fi
+
+    priv="$(wg genkey)"
+
+    cat >"/etc/wireguard/$iface.conf" <<EOF
+[Interface]
+Address = $ip
+ListenPort = $port
+PrivateKey = $priv
+EOF
+
+    chown -R root:root /etc/wireguard
+    chmod -R u+rwX,go-rwx /etc/wireguard
+}
+
+wipe() {
+    # Reset Wireguard
+    rm -rf /etc/wireguard/wg*
+
+    # Reset OpenVPN
+    rm -rf /etc/openvpn/{clients,ipp,ta} /etc/openvpn/*.conf
+    certify -p /etc/openvpn/pki -w
+}
+
+declare -a args deps
+unset force help
+color="true"
+deps+=("/etc/local.d")
+deps+=("busybox")
+deps+=("certify")
+deps+=("jq")
+deps+=("obfsproxy")
+deps+=("qrencode")
+deps+=("wg")
+deps+=("wg-quick")
+
+# Check for missing dependencies
+check_deps
+
+# Parse command line options
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        "--") shift && args+=("$@") && break ;;
+        "-f"|"--force") force="true" ;;
+        "-h"|"--help") help="true" ;;
+        "--no-color") unset color ;;
+        *) args+=("$1") ;;
+    esac
+    shift
+done
+[[ ${#args[@]} -eq 0 ]] || set -- "${args[@]}"
+
+# Check for valid params
+[[ -z $help ]] || usage 0
+case "$1" in
+    "qr") [[ $# -eq 3 ]] || usage 1 ;;
+    *) [[ $# -eq 1 ]] || usage 1 ;;
+esac
+
+conf="$HOME/.config/vpns.conf"
+[[ -f $conf ]] || usage 2
+
+case "$1" in
+    "example") example ;;
+    "iptables") gen_iptables ;;
+    "qr") qr "$2" "$3" ;;
+    "setup") stop; rebuild; start ;;
+    "teardown") stop true; wipe ;;
+    *) usage 3 ;;
+esac
