@@ -571,18 +571,18 @@ Actions:
 
 Quick Start:
 
-1. Edit $HOME/.config/vpns.conf
-    - See "vpns example" for an example
+1. Edit $HOME/.config/avf.conf
+    - See "avf example" for an example
 
 2. Create and edit /etc/iptables/iptables.rules to open additional
    ports (SSH)
-    - vpns iptables >/etc/iptables/iptables.rules
+    - avf iptables >/etc/iptables/iptables.rules
     - iptables-restore </etc/iptables/iptables.rules
     - iptables-save >/etc/iptables/rules-save
 
-3. Run "vpns setup" to generate all VPN configs
+3. Run "avf setup" to generate all VPN configs
 
-4. Run "vpns teardown" to start over and repeat steps 1 through 3 as
+4. Run "avf teardown" to start over and repeat steps 1 through 3 as
 needed.
 
 EOF
@@ -739,7 +739,7 @@ case "$1" in
     *) [[ $# -eq 1 ]] || usage 1 ;;
 esac
 
-conf="$HOME/.config/vpns.conf"
+conf="$HOME/.config/avf.conf"
 [[ -f $conf ]] || usage 2
 
 case "$1" in

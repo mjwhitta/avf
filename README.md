@@ -9,14 +9,14 @@ and Wireguard at this point in time.
 1. Install Alpine
     - Ensure you are running `edge` and are fully up-to-date
 
-    ```
-    $ cat /etc/apk/repositories
-    https://<mirror.hostname>/alpinelinux/edge/main
-    https://<mirror.hostname>/alpinelinux/edge/community
-    https://<mirror.hostname>/alpinelinux/edge/testing
-    $ apk update
-    $ apk upgrade -a -U
-    ```
+```
+$ cat /etc/apk/repositories
+https://<mirror.hostname>/alpinelinux/edge/main
+https://<mirror.hostname>/alpinelinux/edge/community
+https://<mirror.hostname>/alpinelinux/edge/testing
+$ apk update
+$ apk upgrade -a -U
+```
 
 2. Install bash and git
 
@@ -37,4 +37,9 @@ $ cd ./avf
 $ ./prep
 ```
 
-5. Run `vpns -h` and follow the remaining setup
+5. Install `avf` and read usage to follow the remaining setup
+
+```
+$ ./installer -u /usr/local/bin
+$ avf -h
+```
