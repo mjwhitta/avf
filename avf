@@ -245,12 +245,12 @@ openvpn_gen_client() {
     local port="$(json_get "port" "$3")"
     local proto="$(json_get "proto" "$3")"
     local srv="$proto$port"
+    local tmp="${client}_$srv"
 
-    file="${client}_$srv"
+    file="/etc/openvpn/clients/$tmp.ovpn"
 
-    if [[ -f /etc/openvpn/clients/$file.ovpn ]] &&
-       [[ -z $force ]]; then
-        warn "Client $file already exists. Use --force to overwrite."
+    if [[ -f $file ]] && [[ -z $force ]]; then
+        warn "Client $tmp already exists. Use --force to overwrite."
         return
     fi
 
@@ -258,7 +258,7 @@ openvpn_gen_client() {
 
     certify -c "$client" -p /etc/openvpn/pki
 
-    cat >"/etc/openvpn/clients/$file.ovpn" <<EOF
+    cat >"$file" <<EOF
 <ca>
 $(cat /etc/openvpn/pki/ca/ca.cert.pem)
 </ca>
@@ -591,6 +591,7 @@ EOF
 
 wg_gen_client() {
     local config="$1"
+    local cidr="$(json_get "ip" "$config")"
     local dns="$(json_get "dns" "$config")"
     local endpoint="$(json_get "endpoint" "$config")"
     local file
@@ -604,20 +605,20 @@ wg_gen_client() {
     local route
     local server="$endpoint:$port"
     local subnet
-    local tmp="$(json_get "ip" "$config")"
+    local tmp="$name$port"
 
-    file="/etc/wireguard/$iface/${name}$port.conf"
+    file="/etc/wireguard/$iface/$tmp.conf"
 
     if [[ -f "$file" ]] && [[ -z $force ]]; then
-        warn "Client $name already exists. Use --force to overwrite."
+        warn "Client $tmp already exists. Use --force to overwrite."
         return
     fi
 
     priv="$(wg genkey)"
     psk="$(wg genpsk)"
     pub="$(wg pubkey <<<"$priv")"
-    subnet="$(busybox ipcalc -n "$tmp" | grep -ioPs "network.\K.+")"
-    subnet+="/${tmp##*/}"
+    subnet="$(busybox ipcalc -n "$cidr" | grep -ioPs "network.\K.+")"
+    subnet+="/${cidr##*/}"
 
     cat >>"/etc/wireguard/$iface.conf" <<EOF
 
