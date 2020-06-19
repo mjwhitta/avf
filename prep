@@ -3,9 +3,10 @@
 clean() { rm -rf /tmp/avfinstall; }
 
 # Install deps
-apk add binutils findutils gcc grep iproute2 iptables jq libqrencode \
-    musl-dev openrc openssh-server openvpn py2-setuptools python2 \
-    python2-dev vim vimdiff wireguard-tools yaml-dev
+apk add bind-tools findutils gcc grep iproute2 iptables jq \
+    libqrencode musl-dev openrc openssh-server openssl openvpn \
+    py2-setuptools python2 python2-dev vim vimdiff wireguard-tools \
+    yaml-dev
 
 # Setup install dir
 clean
@@ -21,7 +22,7 @@ git clone https://github.com/isislovecruft/obfsproxy.git && \
     (cd obfsproxy && python2 ./setup.py install --user)
 
 # Uninstall build deps
-apk del gcc musl-dev python2-dev yaml-dev
+apk del -r binutils gcc musl-dev python2-dev yaml-dev
 
 # Clean up
 cd
