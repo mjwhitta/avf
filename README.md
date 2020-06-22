@@ -40,6 +40,8 @@ $ ./prep
 5. Install `avf` and read usage to follow the remaining setup
 
 ```
-$ ./installer -u /usr/local/bin
+$ ./installer
 $ avf -h
 ```
+
+**Note:** Ensure that `~/.local/bin` is in your `$PATH`.
