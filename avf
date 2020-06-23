@@ -736,12 +736,14 @@ done
 # Check for valid params
 [[ -z $help ]] || usage 0
 case "$1" in
+    "example") [[ $# -eq 1 ]] || usage 1 ;;
     "qr") [[ $# -eq 3 ]] || usage 1 ;;
-    *) [[ $# -eq 1 ]] || usage 1 ;;
+    *)
+        [[ $# -eq 1 ]] || usage 1
+        conf="$HOME/.config/avf.conf"
+        [[ -f $conf ]] || usage 2
+        ;;
 esac
-
-conf="$HOME/.config/avf.conf"
-[[ -f $conf ]] || usage 2
 
 case "$1" in
     "example") example ;;
