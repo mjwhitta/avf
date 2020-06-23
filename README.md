@@ -6,6 +6,8 @@ and Wireguard at this point in time.
 
 ## Setup
 
+All below steps assume you are `root`.
+
 1. Install Alpine
     - Ensure you are running `edge` and are fully up-to-date
 
