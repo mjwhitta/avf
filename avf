@@ -717,6 +717,7 @@ wipe() {
 declare -a args deps
 unset force help
 color="true"
+conf="$HOME/.config/avf.conf"
 deps+=("/etc/local.d")
 deps+=("busybox")
 deps+=("certify")
@@ -747,11 +748,11 @@ done
 case "$1" in
     "example") [[ $# -eq 1 ]] || usage 1 ;;
     "qr") [[ $# -eq 3 ]] || usage 1 ;;
-    *)
-        [[ $# -eq 1 ]] || usage 1
-        conf="$HOME/.config/avf.conf"
-        [[ -f $conf ]] || usage 2
-        ;;
+    *) [[ $# -eq 1 ]] || usage 1 ;;
+esac
+case "$1" in
+    "example") ;;
+    *) [[ -f $conf ]] || usage 2 ;;
 esac
 
 case "$1" in
