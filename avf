@@ -254,6 +254,8 @@ openvpn_gen_client() {
         return
     fi
 
+    subinfo "Generating OpenVPN client: $tmp"
+
     mkdir -p /etc/openvpn/clients
 
     certify -c "$client" -p /etc/openvpn/pki
@@ -310,6 +312,8 @@ openvpn_gen_server() {
         warn "Server $srv already exists. Use --force to overwrite."
         return
     fi
+
+    subinfo "Generating OpenVPN server:$srv"
 
     ip="$(
         ip -o a show dev "$iface" | grep -im 1 -oPs "inet\s+\K[^/]+"
@@ -614,6 +618,8 @@ wg_gen_client() {
         return
     fi
 
+    subinfo "Generating Wireguard client: $tmp"
+
     priv="$(wg genkey)"
     psk="$(wg genpsk)"
     pub="$(wg pubkey <<<"$priv")"
@@ -622,6 +628,7 @@ wg_gen_client() {
 
     cat >>"/etc/wireguard/$iface.conf" <<EOF
 
+# $name
 [Peer]
 AllowedIPs = $ip/32
 PresharedKey = $psk
@@ -682,6 +689,8 @@ wg_gen_server() {
         warn "Server $iface already exists. Use --force to overwrite."
         return
     fi
+
+    subinfo "Generating Wireguard server: $iface"
 
     priv="$(wg genkey)"
 
