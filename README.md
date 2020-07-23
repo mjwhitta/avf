@@ -1,5 +1,7 @@
 # Alpine VPN Framework (AVF)
 
+<a href="https://www.buymeacoffee.com/mjwhitta">🍪 Buy me a cookie</a>
+
 This tool will (hopefully) make it trivial to setup an Alpine Linux
 box as a VPN box. It only supports OpenVPN (with optional obfsproxy)
 and Wireguard at this point in time.
