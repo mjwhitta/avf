@@ -47,6 +47,7 @@ $(
 )
 EOF
 fi
+rc-update add dnsmasq
 
 ## Fix /etc/resolv.conf to use dnsmasq on boot
 cat >/etc/local.d/localdns.start <<EOF
@@ -69,4 +70,4 @@ cd
 clean
 
 # Reboot
-echo "Now is a good time to reboot"
+echo "Now is a good time to reboot (some services only start on boot)"
