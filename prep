@@ -61,7 +61,7 @@ cat >/etc/local.d/localdns.stop<<EOF
 
 chattr -i /etc/resolv.conf
 EOF
-chmod 755 /etc/localdns.*
+chmod 755 /etc/local.d/localdns.*
 rc-update add local
 
 # Clean up
