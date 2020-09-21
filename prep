@@ -48,11 +48,21 @@ $(
 EOF
 fi
 
-## Update /etc/resolv.conf
-chattr -i /etc/resolv.conf
+## Fix /etc/resolv.conf to use dnsmasq on boot
+cat >/etc/local.d/localdns.start <<EOF
+#!/usr/bin/env bash
+
 sed -i -r "/^nameserver/d" /etc/resolv.conf
 echo "nameserver 127.0.0.1" >>/etc/resolv.conf
 chattr +i /etc/resolv.conf
+EOF
+cat >/etc/local.d/localdns.stop<<EOF
+#!/usr/bin/env bash
+
+chattr -i /etc/resolv.conf
+EOF
+chmod 755 /etc/localdns.*
+rc-update add local
 
 # Clean up
 cd
