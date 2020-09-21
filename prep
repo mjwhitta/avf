@@ -3,10 +3,10 @@
 clean() { rm -rf /tmp/avfinstall; }
 
 # Install deps
-apk add bind-tools dnsmasq findutils gcc grep iproute2 iptables jq \
-    libqrencode musl-dev openconnect openrc openssh-server openssl \
-    openvpn py2-setuptools python2 python2-dev sed vim vimdiff \
-    wireguard-tools yaml-dev
+apk add bind-tools dnsmasq e2fsprogs-extra findutils gcc grep \
+    iproute2 iptables jq libqrencode musl-dev openconnect openrc \
+    openssh-server openssl openvpn py2-setuptools python2 \
+    python2-dev sed vim vimdiff wireguard-tools yaml-dev
 
 # Setup install dir
 clean
@@ -25,8 +25,14 @@ git clone https://github.com/isislovecruft/obfsproxy.git && \
 apk del -r binutils gcc musl-dev python2-dev yaml-dev
 
 # Tweak some system config files
+
+## Modules
 echo "tun" >/etc/modules-load.d/avf.conf
+
+## Enable forwarding
 echo "net.ipv4.ip_forward=1" >/etc/sysctl.d/avf.conf
+
+## Updated dnsmasq, if needed
 if [[ ! -e /etc/dnsmasq.d/default.conf ]]; then
     cat >/etc/dnsmasq.d/default.conf <<EOF
 no-resolv
@@ -41,8 +47,12 @@ $(
 )
 EOF
 fi
+
+## Update /etc/resolv.conf
+chattr -i /etc/resolv.conf
 sed -i -r "/^nameserver/d" /etc/resolv.conf
 echo "nameserver 127.0.0.1" >>/etc/resolv.conf
+chattr +i /etc/resolv.conf
 
 # Clean up
 cd
