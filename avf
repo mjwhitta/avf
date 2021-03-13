@@ -24,8 +24,8 @@ info() { echo -e "${color:+\e[37m}[*] $*\e[0m"; }
 long_opt() {
     local arg shift="0"
     case "$1" in
-        "--"*"="*) arg="${1#*=}"; [[ -n $arg ]] || usage 127 ;;
-        *) shift="1"; shift; [[ $# -gt 0 ]] || usage 127; arg="$1" ;;
+        "--"*"="*) arg="${1#*=}"; [[ -n $arg ]] || return 127 ;;
+        *) shift="1"; shift; [[ $# -gt 0 ]] || return 127; arg="$1" ;;
     esac
     echo "$arg"
     return $shift
@@ -564,21 +564,22 @@ usage() {
     cat <<EOF
 Usage: ${0##*/} [OPTIONS] <action> [args]
 
-Manage all OpenVPN and Wireguard configs.
+DESCRIPTION
+    Manage all OpenVPN and Wireguard configs.
 
-Options:
+OPTIONS
     -f, --force    Overwrite existing configs
     -h, --help     Display this help message
     --no-color     Disable colorized output
 
-Actions:
-    example             Generate an example config
-    iptables            Generate iptables rules
-    qr [iface] [client] Generate qrcodes for wireguard client
-    setup               Build all VPN configs
-    teardown            Erase all VPN configs
+ACTIONS
+    example                Generate an example config
+    iptables               Generate iptables rules
+    qr [iface] [client]    Generate qrcodes for wireguard client
+    setup                  Build all VPN configs
+    teardown               Erase all VPN configs
 
-Quick Start:
+QUICK START
 
 1. Edit $HOME/.config/avf.conf
     - See "avf example" for an example
@@ -592,7 +593,7 @@ Quick Start:
 3. Run "avf setup" to generate all VPN configs
 
 4. Run "avf teardown" to start over and repeat steps 1 through 3 as
-needed.
+   needed.
 
 EOF
     exit "$1"
@@ -719,10 +720,34 @@ wipe() {
     certify -p /etc/openvpn/pki -w
 }
 
-declare -a args deps
+declare -a args
 unset force help
 color="true"
 conf="$HOME/.config/avf.conf"
+
+# Parse command line options
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        "--") shift; args+=("$@"); break ;;
+        "-f"|"--force") force="true" ;;
+        "-h"|"--help") help="true" ;;
+        "--no-color") unset color ;;
+        *) args+=("$1") ;;
+    esac
+    case "$?" in
+        0) ;;
+        1) shift ;;
+        *) usage $? ;;
+    esac
+    shift
+done
+[[ ${#args[@]} -eq 0 ]] || set -- "${args[@]}"
+
+# Help info
+[[ -z $help ]] || usage 0
+
+# Check for missing dependencies
+declare -a deps
 deps+=("/etc/local.d")
 deps+=("busybox")
 deps+=("certify")
@@ -731,25 +756,9 @@ deps+=("obfsproxy")
 deps+=("qrencode")
 deps+=("wg")
 deps+=("wg-quick")
-
-# Check for missing dependencies
 check_deps
 
-# Parse command line options
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        "--") shift && args+=("$@") && break ;;
-        "-f"|"--force") force="true" ;;
-        "-h"|"--help") help="true" ;;
-        "--no-color") unset color ;;
-        *) args+=("$1") ;;
-    esac
-    shift
-done
-[[ ${#args[@]} -eq 0 ]] || set -- "${args[@]}"
-
 # Check for valid params
-[[ -z $help ]] || usage 0
 case "$1" in
     "example") [[ $# -eq 1 ]] || usage 1 ;;
     "qr") [[ $# -eq 3 ]] || usage 1 ;;
