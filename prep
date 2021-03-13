@@ -6,7 +6,7 @@ clean() { rm -rf /tmp/avfinstall; }
 apk add bind-tools dnsmasq e2fsprogs-extra findutils gcc grep \
     iproute2 iptables jq libqrencode musl-dev openconnect openrc \
     openssh-server openssl openvpn py2-setuptools python2 \
-    python2-dev sed vim vimdiff wireguard-tools yaml-dev
+    python2-dev sed sudo vim vimdiff wireguard-tools yaml-dev
 
 # Setup install dir
 clean
