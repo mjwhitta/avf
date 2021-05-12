@@ -576,7 +576,7 @@ OPTIONS
 ACTIONS
     example                Generate an example config
     iptables               Generate iptables rules
-    qr [iface] [client]    Generate qrcodes for wireguard client
+    qr <iface> <client>    Generate qrcodes for wireguard client
     setup                  Build all VPN configs
     teardown               Erase all VPN configs
 
