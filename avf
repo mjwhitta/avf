@@ -17,10 +17,10 @@ check_deps() {
     done; unset d
     [[ -z $missing ]] || exit 128
 }
-err() { echo -e "${color:+\e[31m}[!] $*\e[0m"; }
+err() { echo -e "${color:+\e[31m}[!] $*${color:+\e[0m}" >&2; }
 errx() { err "${*:2}"; exit "$1"; }
-good() { echo -e "${color:+\e[32m}[+] $*\e[0m"; }
-info() { echo -e "${color:+\e[37m}[*] $*\e[0m"; }
+good() { echo -e "${color:+\e[32m}[+] $*${color:+\e[0m}"; }
+info() { echo -e "${color:+\e[37m}[*] $*${color:+\e[0m}"; }
 long_opt() {
     local arg shift="0"
     case "$1" in
@@ -30,8 +30,8 @@ long_opt() {
     echo "$arg"
     return $shift
 }
-subinfo() { echo -e "${color:+\e[36m}[=] $*\e[0m"; }
-warn() { echo -e "${color:+\e[33m}[-] $*\e[0m"; }
+subinfo() { echo -e "${color:+\e[36m}[=] $*${color:+\e[0m}"; }
+warn() { echo -e "${color:+\e[33m}[-] $*${color:+\e[0m}"; }
 ### Helpers end
 
 example() {
@@ -568,9 +568,9 @@ DESCRIPTION
     Manage all OpenVPN and Wireguard configs.
 
 OPTIONS
-    -f, --force    Overwrite existing configs
-    -h, --help     Display this help message
-    --no-color     Disable colorized output
+    -f, --force       Overwrite existing configs
+    -h, --help        Display this help message
+        --no-color    Disable colorized output
 
 ACTIONS
     example                Generate an example config
@@ -583,17 +583,13 @@ QUICK START
 
 1. Edit $HOME/.config/avf.conf
     - See "avf example" for an example
-
 2. Create and edit /etc/iptables/iptables.rules to open additional
    ports (SSH)
     - avf iptables >/etc/iptables/iptables.rules
+    - vim /etc/iptables/iptables.rules
     - iptables-restore </etc/iptables/iptables.rules
-    - iptables-save >/etc/iptables/rules-save
-
 3. Run "avf setup" to generate all VPN configs
-
-4. Run "avf teardown" to start over and repeat steps 1 through 3 as
-   needed.
+4. Run "avf teardown" to start over
 
 EOF
     exit "$1"
