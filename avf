@@ -368,6 +368,7 @@ $(
 server $pool_ip $pool_mask
 status /var/log/openvpn-status.log
 tls-auth /etc/openvpn/ta/$srv.key 0
+topology subnet
 user nobody
 verb 3
 EOF
