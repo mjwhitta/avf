@@ -54,7 +54,7 @@ action="install"
 color="true"
 dir="$HOME/.local/bin"
 dst="avf"
-src="avf"
+src="$dst"
 
 # Parse command line options
 while [[ $# -gt 0 ]]; do

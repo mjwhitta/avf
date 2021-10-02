@@ -93,8 +93,8 @@ example() {
       "endpoint": "vpn.your.tld",
       "ip": "10.0.0.1/24",
       "port": 443,
+      "#routes": "If nothing provided, all traffic goes thru tunnel",
       "routes": [
-        "If nothing is provided, all traffic goes thru tunnel",
         "10.0.0.0/8",
         "172.16.0.0/12",
         "192.168.0.0/16"
@@ -336,7 +336,7 @@ openvpn_gen_server() {
     certify -d -p /etc/openvpn/pki "$endpoint"
 
     if [[ ! -f /etc/openvpn/ta/$srv.key ]]; then
-        openvpn --genkey --secret "/etc/openvpn/ta/$srv.key"
+        openvpn --genkey secret "/etc/openvpn/ta/$srv.key"
     fi
 
     cat >"/etc/openvpn/$srv.conf" <<EOF
@@ -467,6 +467,8 @@ start() {
 
     cat >/etc/local.d/obfs3proxy.start <<EOF
 #!/usr/bin/env bash
+
+[[ -f "$HOME/.local/bin/obfsproxy" ]] || exit
 
 json_get() {
     if [[ \$# -eq 1 ]]; then
@@ -749,7 +751,7 @@ deps+=("/etc/local.d")
 deps+=("busybox")
 deps+=("certify")
 deps+=("jq")
-deps+=("obfsproxy")
+# deps+=("obfsproxy")
 deps+=("qrencode")
 deps+=("wg")
 deps+=("wg-quick")

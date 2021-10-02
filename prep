@@ -1,12 +1,50 @@
 #!/usr/bin/env bash
 
-clean() { rm -rf /tmp/avfinstall; }
+clean() { rm -fr /tmp/avfinstall; }
+
+usage() {
+    cat <<EOF
+Usage: ${0##*/} [OPTIONS]
+
+DESCRIPTION
+    Prepare alpine system for VPN framework.
+
+OPTIONS
+    -h, --help    Display this help message
+        --obfs    Install obfsproxy
+
+EOF
+    exit "$1"
+}
+
+declare -a args
+unset help obfs
+
+# Parse command line options
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        "--") shift; args+=("$@"); break ;;
+        "-h"|"--help") help="true" ;;
+        "--obfs") obfs="true" ;;
+        *) args+=("$1") ;;
+    esac
+    shift
+done
+[[ ${#args[@]} -eq 0 ]] || set -- "${args[@]}"
+
+# Help info
+[[ -z $help ]] || usage 0
+
+# Fix repos
+sed -i -r -e "/cdrom|v3./d" -e "s/#//g" /etc/apk/repositories
 
 # Install deps
-apk add bind-tools dnsmasq e2fsprogs-extra findutils gcc grep \
-    iproute2 iptables jq libqrencode musl-dev openconnect openrc \
-    openssh-server openssl openvpn py2-setuptools python2 \
-    python2-dev sed sudo vim vimdiff wireguard-tools yaml-dev
+apk update
+apk upgrade -a -U
+apk add bash bind-tools curl dnsmasq e2fsprogs-extra \
+    findutils git grep iproute2 iptables jq libqrencode openconnect \
+    openrc openssh-server openssl openvpn sed sudo vim vimdiff \
+    wireguard-tools
 
 # Setup install dir
 clean
@@ -18,11 +56,41 @@ git clone https://gitlab.com/mjwhitta/certifyme.git && \
     (cd certifyme && ./installer)
 
 # Install obfsproxy for OpenVPN
-git clone https://github.com/isislovecruft/obfsproxy.git && \
-    (cd obfsproxy && python2 ./setup.py install --user)
+if [[ -n $obfs ]]; then
+    # Install build deps
+    apk add bzip2 gcc musl-dev py2-setuptools python2 python2-dev tar
 
-# Uninstall build deps
-apk del -r binutils gcc musl-dev python2-dev yaml-dev
+    # Get pathlib
+    curl -O "https://files.pythonhosted.org/packages/df/16/e9d6bcf1aed52a55bc1696324ab22586716053b3e97b85266e0f3ad36bae/pathlib2-2.3.6.tar.gz"
+    tar -f pathlib2-2.3.6.tar.gz -xz
+    (cd pathlib2-2.3.6 && python2 ./setup.py install --user)
+
+    # Get incremental
+    curl -O "https://files.pythonhosted.org/packages/4f/c5/430765c697afc217c8491785de321a21fa4d983dda14bcd82feb965b0593/incremental-21.3.0.tar.gz"
+    tar -f incremental-21.3.0.tar.gz -xz
+    (cd incremental-21.3.0 && python2 ./setup.py install --user)
+
+    # Get idna
+    curl -O "https://files.pythonhosted.org/packages/ea/b7/e0e3c1c467636186c39925827be42f16fee389dc404ac29e930e9136be70/idna-2.10.tar.gz"
+    tar -f idna-2.10.tar.gz -xz
+    (cd idna-2.10 && python2 ./setup.py install --user)
+
+    # Get twisted
+    curl -O "https://files.pythonhosted.org/packages/4a/b4/4973c7ccb5be2ec0abc779b7d5f9d5f24b17b0349e23240cfc9dc3bd83cc/Twisted-20.3.0.tar.bz2"
+    bzip2 -dk Twisted-20.3.0.tar.bz2
+    tar -f Twisted-20.3.0.tar -x
+    sed -i "s/pathlib/pathlib2/g" ./Twisted-20.3.0/setup.py
+    (cd Twisted-20.3.0 && python2 ./setup.py install --user)
+
+    # Get obfsproxy
+    curl -O "https://files.pythonhosted.org/packages/f6/25/ca704db7b8d0e462cd942ffad59674e4b2d33057c2587eab8a6b846cee1d/obfsproxy-0.2.13.tar.gz"
+    tar -f obfsproxy-0.2.13.tar.gz -xz
+    sed -i "s/pathlib/pathlib2/g" ./obfsproxy-0.2.13/setup.py
+    (cd obfsproxy-0.2.13 && python2 ./setup.py install --user)
+
+    # Uninstall build deps
+    apk del -r bzip2 gcc musl-dev python2-dev tar
+fi
 
 # Tweak some system config files
 
@@ -32,7 +100,7 @@ echo "tun" >/etc/modules-load.d/avf.conf
 ## Enable forwarding
 echo "net.ipv4.ip_forward=1" >/etc/sysctl.d/avf.conf
 
-## Updated dnsmasq, if needed
+## Update dnsmasq, if needed
 if [[ ! -e /etc/dnsmasq.d/default.conf ]]; then
     cat >/etc/dnsmasq.d/default.conf <<EOF
 no-resolv
@@ -46,24 +114,24 @@ $(
     done < <(grep -ioPs "^nameserver\s+\K.+" /etc/resolv.conf)
 )
 EOF
+else
+    echo "/etc/dnsmasq.d/default already exists"
+    echo "Will assume you know what you are doing..."
 fi
+sed -i -r "/^nameserver/d" /etc/resolv.conf
+echo "nameserver 127.0.0.1" >>/etc/resolv.conf
 rc-update add dnsmasq
 
 ## Fix /etc/resolv.conf to use dnsmasq on boot
-cat >/etc/local.d/localdns.start <<EOF
-#!/usr/bin/env bash
-
-sed -i -r "/^nameserver/d" /etc/resolv.conf
-echo "nameserver 127.0.0.1" >>/etc/resolv.conf
-chattr +i /etc/resolv.conf
+mkdir -p /etc/udhcpc
+if [[ ! -e /etc/udhcpc/udhcpc.conf ]]; then
+    cat >/etc/udhcpc/udhcpc.conf <<EOF
+RESOLV_CONF=no
 EOF
-cat >/etc/local.d/localdns.stop<<EOF
-#!/usr/bin/env bash
-
-chattr -i /etc/resolv.conf
-EOF
-chmod 755 /etc/local.d/localdns.*
-rc-update add local
+else
+    echo "/etc/udhcpc/udhcpc.conf already exists"
+    echo "Will assume you know what you are doing..."
+fi
 
 # Clean up
 cd
