@@ -315,7 +315,7 @@ openvpn_gen_server() {
     )"
 
     while read -r route; do
-        routes+=("--route $route")
+        routes+=("$route")
     done < <(json_get "routes[]" "$config"); unset route
 
     mkdir -p /etc/openvpn/{ipp,pki,ta}
