@@ -55,25 +55,13 @@ example() {
       "dns": "8.8.8.8",
       "endpoint": "vpn.your.tld",
       "iface": "eth0",
-      "pool": {
-        "ips": "10.0.254.1",
-        "mask": "255.255.255.0"
-      },
+      "pool": "10.0.254.0/255.255.255.0",
       "ports": [
-        {
-          "port": 443,
-          "proto": "tcp"
-        },
-        {
-          "port": 5353,
-          "proto": "udp"
-        }
+        "443/tcp",
+        "5353/udp"
       ],
       "routes": [
-        {
-          "ips": "192.168.0.0",
-          "mask": "255.255.0.0"
-        }
+        "192.168.0.0/255.255.0.0"
       ]
     }
   ],
@@ -172,8 +160,8 @@ $(
     if [[ -n $(json_get "openvpn") ]]; then
         while read -r line; do
             while read -r port; do
-                case "$(json_get "proto" "$port")" in
-                    "tcp") ports+=("$(json_get "port" "$port")") ;;
+                case "${port##*/}" in
+                    "tcp") ports+=("${port%%/*}") ;;
                 esac
             done < <(json_get "ports[]" "$line"); unset port
         done < <(json_get "openvpn[]"); unset line
@@ -194,8 +182,8 @@ $(
     if [[ -n $(json_get "openvpn") ]]; then
         while read -r line; do
             while read -r port; do
-                case "$(json_get "proto" "$port")" in
-                    "udp") ports+=("$(json_get "port" "$port")") ;;
+                case "${port##*/}" in
+                    "udp") ports+=("${port%%/*}") ;;
                 esac
             done < <(json_get "ports[]" "$line"); unset port
         done < <(json_get "openvpn[]"); unset line
@@ -248,8 +236,8 @@ openvpn_gen_client() {
     local client="$1"
     local config="$2"
     local endpoint="$(json_get "endpoint" "$config")"
-    local port="$(json_get "port" "$3")"
-    local proto="$(json_get "proto" "$3")"
+    local port="${3%%/*}"
+    local proto="${3##*/}"
     local srv="$proto$port"
     local tmp="${client}_$srv"
 
@@ -306,11 +294,11 @@ openvpn_gen_server() {
     local iface="$(json_get "iface" "$config")"
     local ip
     local max="$(json_get "clients|length" "$config")"
-    local pool="$(json_get "pool|join(\"/\")" "$config")"
-    local pool_ip
-    local pool_mask
-    local port="$(json_get "port" "$2")"
-    local proto="$(json_get "proto" "$2")"
+    local pool="$(json_get "pool" "$config")"
+    local pool_ip="${pool%%/*}"
+    local pool_mask="${pool##*/}"
+    local port="${2%%/*}"
+    local proto="${2##*/}"
     local route
     local -a routes
     local srv="$proto$port"
@@ -326,11 +314,8 @@ openvpn_gen_server() {
         ip -o a show dev "$iface" | grep -im 1 -oPs "inet\s+\K[^/]+"
     )"
 
-    pool_ip="${pool%%/*}"
-    pool_mask="${pool##*/}"
-
     while read -r route; do
-        routes+=("--route $(json_get "|join(\"/\")" "$route")")
+        routes+=("--route $route")
     done < <(json_get "routes[]" "$config"); unset route
 
     mkdir -p /etc/openvpn/{ipp,pki,ta}
@@ -533,8 +518,8 @@ EOF
     if [[ -n $(json_get "openvpn") ]]; then
         while read -r line; do
             while read -r port; do
-                srv="$(json_get "proto" "$port")"
-                srv+="$(json_get "port" "$port")"
+                srv="${port##*/}"
+                srv+="${port%%/*}"
                 rc-update add "openvpn.$srv"
                 rc-service "openvpn.$srv" start
             done < <(json_get "ports[]" "$line"); unset port
