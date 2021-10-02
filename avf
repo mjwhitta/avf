@@ -586,11 +586,11 @@ QUICK START
 
 1. Edit $HOME/.config/avf.conf
     - See "avf example" for an example
-2. Create and edit /etc/iptables/iptables.rules to open additional
+2. Create and edit /etc/iptables/rules-save to open additional
    ports (SSH)
-    - avf iptables >/etc/iptables/iptables.rules
-    - vim /etc/iptables/iptables.rules
-    - iptables-restore </etc/iptables/iptables.rules
+    - avf iptables >/etc/iptables/rules-save
+    - vim /etc/iptables/rules-save
+    - iptables-restore </etc/iptables/rules-save
 3. Run "avf setup" to generate all VPN configs
 4. Run "avf teardown" to start over
 
