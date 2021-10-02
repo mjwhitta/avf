@@ -122,6 +122,9 @@ sed -i -r "/^nameserver/d" /etc/resolv.conf
 echo "nameserver 127.0.0.1" >>/etc/resolv.conf
 rc-update add dnsmasq
 
+## Enable iptables
+rc-update add iptables
+
 ## Fix /etc/resolv.conf to use dnsmasq on boot
 mkdir -p /etc/udhcpc
 if [[ ! -e /etc/udhcpc/udhcpc.conf ]]; then
