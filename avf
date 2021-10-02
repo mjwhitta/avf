@@ -56,8 +56,8 @@ example() {
       "endpoint": "vpn.your.tld",
       "iface": "eth0",
       "pool": {
-        "ips": "192.168.1.16",
-        "mask": "255.255.255.248"
+        "ips": "10.0.254.1",
+        "mask": "255.255.255.0"
       },
       "ports": [
         {
@@ -109,6 +109,7 @@ gen_iptables() {
     local line
     local port
     local -a ports
+    local ssh="$(awk '/^#?Port/ {print $2}' /etc/ssh/sshd_config)"
 
     cat <<EOF
 *filter
@@ -159,7 +160,7 @@ gen_iptables() {
 # Allow TCP ports
 $(
     unset ports
-    ports+=("22")
+    [[ -z $ssh ]] || ports+=("$ssh")
     ports+=("53")
 
     if [[ -n $(json_get "obfsproxy") ]]; then
@@ -304,6 +305,7 @@ openvpn_gen_server() {
     local endpoint="$(json_get "endpoint" "$config")"
     local iface="$(json_get "iface" "$config")"
     local ip
+    local max="$(json_get "clients|length" "$config")"
     local pool="$(json_get "pool|join(\"/\")" "$config")"
     local pool_ip
     local pool_mask
@@ -342,7 +344,6 @@ openvpn_gen_server() {
     cat >"/etc/openvpn/$srv.conf" <<EOF
 ca /etc/openvpn/pki/ca/ca.cert.pem
 cert /etc/openvpn/pki/certs/$endpoint.cert.pem
-client-to-client
 compress lz4-v2
 dev tun
 dh /etc/openvpn/pki/dh/dh2048.pem
@@ -353,7 +354,7 @@ keepalive 32 128
 key /etc/openvpn/pki/private/$endpoint.key.pem
 local $ip
 log-append /var/log/openvpn.log
-max-clients 2
+max-clients $max
 persist-key
 persist-tun
 port $port
@@ -586,10 +587,9 @@ QUICK START
 
 1. Edit $HOME/.config/avf.conf
     - See "avf example" for an example
-2. Create and edit /etc/iptables/rules-save to open additional
-   ports (SSH)
+2. Create and edit /etc/iptables/rules-save
     - avf iptables >/etc/iptables/rules-save
-    - vim /etc/iptables/rules-save
+    - vim /etc/iptables/rules-save # optional, for additional ports
     - iptables-restore </etc/iptables/rules-save
 3. Run "avf setup" to generate all VPN configs
 4. Run "avf teardown" to start over
@@ -748,8 +748,10 @@ done
 # Check for missing dependencies
 declare -a deps
 deps+=("/etc/local.d")
+deps+=("awk")
 deps+=("busybox")
 deps+=("certify")
+deps+=("grep")
 deps+=("jq")
 # deps+=("obfsproxy")
 deps+=("qrencode")
