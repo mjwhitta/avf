@@ -34,8 +34,9 @@ $ ./prep [--obfs]
 5. Install `avf` and read usage to follow the remaining setup
 
 ```
-$ ./installer
+$ ./installer [-d /usr/local/bin]
 $ avf -h
 ```
 
-**Note:** Ensure that `~/.local/bin` is in your `$PATH`.
+**Note:** Ensure that `~/.local/bin` is in your `$PATH` or use the
+`-d` flag.
