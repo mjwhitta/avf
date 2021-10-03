@@ -587,7 +587,10 @@ QUICK START
 
 1. Edit $HOME/.config/avf.conf
     - See "avf ex" for an example
-2. Run "iptables-restore < <(avf fw)" to setup iptables
+2. Setup iptables
+    - Run "avf fw >/etc/iptables/rules.save"
+    - Optionally modify /etc/iptables/rules.save as needed
+    - Run "iptables-restore </etc/iptables/rules.save"
 3. Run "avf up" to generate all VPN configs
 4. Run "avf down" to start over
 
