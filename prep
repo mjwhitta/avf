@@ -43,8 +43,8 @@ apk update
 apk upgrade -a -U
 apk add bash bind-tools curl dnsmasq e2fsprogs-extra \
     findutils git grep iproute2 iptables jq libqrencode openconnect \
-    openrc openssh-server openssl openvpn sed sudo vim vimdiff \
-    wireguard-tools
+    openrc openssh-server openssl openvpn sed shadow sudo vim \
+    vimdiff wireguard-tools
 
 # Setup install dir
 clean
@@ -118,14 +118,14 @@ else
     echo "/etc/dnsmasq.d/default already exists"
     echo "Will assume you know what you are doing..."
 fi
-sed -i -r "/^nameserver/d" /etc/resolv.conf
-echo "nameserver 127.0.0.1" >>/etc/resolv.conf
 rc-update add dnsmasq
+rc-service dnsmasq start
 
 ## Enable iptables
 rc-update add iptables
+rc-service iptables start
 
-## Fix /etc/resolv.conf to use dnsmasq on boot
+## Fix /etc/resolv.conf to use dnsmasq
 mkdir -p /etc/udhcpc
 if [[ ! -e /etc/udhcpc/udhcpc.conf ]]; then
     cat >/etc/udhcpc/udhcpc.conf <<EOF
@@ -135,10 +135,17 @@ else
     echo "/etc/udhcpc/udhcpc.conf already exists"
     echo "Will assume you know what you are doing..."
 fi
+sed -i -r "/^nameserver/d" /etc/resolv.conf
+echo "nameserver 127.0.0.1" >>/etc/resolv.conf
+
+## bash setup
+chsh -s /bin/bash root
+echo "export PATH=/root/.local/bin:\$PATH" >>/root/.bash_profile
 
 # Clean up
 cd
 clean
 
 # Reboot
-echo "Now is a good time to reboot (some services only start on boot)"
+echo "You are now ready to install avf: ./installer"
+echo "You should then reboot (some services only start on boot)"

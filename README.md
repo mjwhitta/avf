@@ -37,6 +37,3 @@ $ ./prep [--obfs]
 $ ./installer [-d /usr/local/bin]
 $ avf -h
 ```
-
-**Note:** Ensure that `~/.local/bin` is in your `$PATH` or use the
-`-d` flag.
