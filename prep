@@ -43,8 +43,8 @@ apk update
 apk upgrade -a -U
 apk add bash bind-tools curl dnsmasq e2fsprogs-extra \
     findutils git grep iproute2 iptables jq libqrencode openconnect \
-    openrc openssh-server openssl openvpn sed shadow sudo vim \
-    vimdiff wireguard-tools
+    openrc openssh-server openssl openvpn sed sudo vim vimdiff \
+    wireguard-tools
 
 # Setup install dir
 clean
@@ -139,7 +139,7 @@ sed -i -r "/^nameserver/d" /etc/resolv.conf
 echo "nameserver 127.0.0.1" >>/etc/resolv.conf
 
 ## bash setup
-chsh -s /bin/bash root
+sed -i -r "s/^(root:x.+)\/bin\/ash/\1\/bin\/bash/g" /etc/passwd
 echo "export PATH=/root/.local/bin:\$PATH" >>/root/.bash_profile
 
 # Clean up
