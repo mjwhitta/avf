@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # shellcheck disable=SC2010
-# shellcheck disable=SC2086
+# shellcheck disable=SC2016
 
 ### Helpers begin
 check_deps() {
@@ -106,7 +106,6 @@ EOF
 gen_iptables() {
     local line
     local port
-    local -a ports
     local ssh="$(awk '/^#?Port/ {print $2}' /etc/ssh/sshd_config)"
 
     cat <<EOF
@@ -157,7 +156,7 @@ gen_iptables() {
 -A TCP -j SYNFLOOD
 # Allow TCP ports
 $(
-    unset ports
+    declare -a ports
     [[ -z $ssh ]] || ports+=("$ssh")
     ports+=("53")
 
@@ -185,7 +184,7 @@ EOL
 )
 # Allow UDP ports
 $(
-    unset ports
+    declare -a ports
     ports+=("53")
 
     if [[ -n $(json_get "openvpn") ]]; then
@@ -209,8 +208,6 @@ $(
 -A UDP -p udp -m multiport --dports $(join "," ${ports[@]}) -j ACCEPT
 EOL
     fi
-
-    unset ports
 )
 COMMIT
 *nat
