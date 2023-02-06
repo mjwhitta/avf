@@ -52,7 +52,7 @@ mkdir -p /tmp/avfinstall
 cd /tmp/avfinstall
 
 # Install certifyme for OpenVPN
-git clone https://gitlab.com/mjwhitta/certifyme.git && \
+git clone https://github.com/mjwhitta/certifyme.git && \
     (cd certifyme && ./installer)
 
 # Install obfsproxy for OpenVPN

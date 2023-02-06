@@ -21,7 +21,7 @@ $ apk add bash git
 3. Clone AVF
 
 ```
-$ git clone https://gitlab.com/mjwhitta/avf.git
+$ git clone https://github.com/mjwhitta/avf.git
 $ cd ./avf
 ```
 
