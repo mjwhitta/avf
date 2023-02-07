@@ -54,3 +54,5 @@ auto eth0
 iface eth0 inet dhcp
     post-up ip r a 192.168.0.0/16 via <gateway> dev eth0
 ```
+
+Then read the comments in `avf fw` and adjust your firewall as needed.
