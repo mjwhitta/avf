@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-# shellcheck disable=SC2010
-# shellcheck disable=SC2016
+# shellcheck disable=SC2155
 
 ### Helpers begin
 check_deps() {
@@ -28,7 +27,7 @@ long_opt() {
         *) shift="1"; shift; [[ $# -gt 0 ]] || return 127; arg="$1" ;;
     esac
     echo "$arg"
-    return $shift
+    return "$shift"
 }
 subinfo() { echo -e "${color:+\e[36m}[=] $*${color:+\e[0m}"; }
 warn() { echo -e "${color:+\e[33m}[-] $*${color:+\e[0m}"; }
@@ -106,7 +105,7 @@ EOF
 gen_iptables() {
     local line
     local port
-    local ssh="$(awk '/^#?Port/ {print $2}' /etc/ssh/sshd_config)"
+    local ssh="$(awk '/^#?Port\s/ {print $2}' /etc/ssh/sshd_config)"
 
     cat <<EOF
 *filter
@@ -137,11 +136,13 @@ gen_iptables() {
 -A FORWARD -m conntrack --ctstate INVALID -j DROP
 # Reject forwarding the wrong way
 -A FORWARD -i eth+ -j HARDPASS
-# Forwading rules for OpenVPN and Wireguard
+# Reject forwarding that is coming in and out the same interface
 -A FORWARD -i tun+ -o tun+ -j HARDPASS
+-A FORWARD -i wg+ -o wg+ -j HARDPASS
+# Delete these next two if you're planning on using an upstream VPN
 -A FORWARD -i tun+ -o wg+ -j HARDPASS
 -A FORWARD -i wg+ -o tun+ -j HARDPASS
--A FORWARD -i wg+ -o wg+ -j HARDPASS
+# Forwarding rules for OpenVPN and Wireguard
 -A FORWARD -i tun+ -j ACCEPT
 -A FORWARD -i wg+ -j ACCEPT
 # Otherwise reject
@@ -156,7 +157,10 @@ gen_iptables() {
 -A TCP -j SYNFLOOD
 # Allow TCP ports
 $(
+    unset ports
     declare -a ports
+
+    # shellcheck disable=SC2030
     [[ -z $ssh ]] || ports+=("$ssh")
     ports+=("53")
 
@@ -184,7 +188,10 @@ EOL
 )
 # Allow UDP ports
 $(
+    unset ports
     declare -a ports
+
+    # shellcheck disable=SC2031
     ports+=("53")
 
     if [[ -n $(json_get "openvpn") ]]; then
@@ -217,6 +224,8 @@ COMMIT
 :POSTROUTING ACCEPT [0:0]
 # Masquerade for OpenVPN and Wireguard (may need to adjust eth+)
 -A POSTROUTING -o eth+ -j MASQUERADE
+# Uncomment the next line if using an upstream VPN
+#-A POSTROUTING -o tun+ -j MASQUERADE
 COMMIT
 *raw
 :PREROUTING ACCEPT [0:0]
@@ -269,13 +278,13 @@ openvpn_gen_client() {
 $(cat /etc/openvpn/pki/ca/ca.cert.pem)
 </ca>
 <cert>
-$(cat "/etc/openvpn/pki/certs/$client.client.cert.pem")
+$(cat "/etc/openvpn/pki/certs/$client.cert.pem")
 </cert>
 client
 dev tun
 group nobody
 <key>
-$(cat "/etc/openvpn/pki/private/$client.client.key.pem")
+$(cat "/etc/openvpn/pki/private/$client.key.pem")
 </key>
 key-direction 1
 mute-replay-warnings
@@ -332,9 +341,13 @@ openvpn_gen_server() {
         routes+=("$route")
     done < <(json_get "routes[]" "$config"); unset route
 
-    mkdir -p /etc/openvpn/{ipp,pki,ta}
+    mkdir -p /etc/openvpn/{dh,ipp,pki,ta}
 
-    certify -d -p /etc/openvpn/pki "$endpoint"
+    # Create DH params
+    openssl dhparam -out /etc/openvpn/dh/dh2048.pem 2048
+
+    # Create CA
+    certify -p /etc/openvpn/pki "$endpoint"
 
     if [[ ! -f /etc/openvpn/ta/$srv.key ]]; then
         openvpn --genkey secret "/etc/openvpn/ta/$srv.key"
@@ -343,9 +356,8 @@ openvpn_gen_server() {
     cat >"/etc/openvpn/$srv.conf" <<EOF
 ca /etc/openvpn/pki/ca/ca.cert.pem
 cert /etc/openvpn/pki/certs/$endpoint.cert.pem
-compress lz4-v2
 dev tun
-dh /etc/openvpn/pki/dh/dh2048.pem
+dh /etc/openvpn/dh/dh2048.pem
 $([[ "$proto" == "udp" ]] || echo -n "#")explicit-exit-notify 1
 group nobody
 ifconfig-pool-persist /etc/openvpn/ipp/$srv.txt
@@ -358,11 +370,10 @@ persist-key
 persist-tun
 port $port
 proto $proto
-push "compress lz4-v2"
-${dns:+push 'dhcp-option DNS $dns'}
+${dns:+push \"dhcp-option DNS $dns\"}
 $(
     for route in "${routes[@]}"; do
-        echo "push 'route ${route%%/*} ${route##*/}'"
+        echo "push \"route ${route%%/*} ${route##*/}\""
     done; unset route
 )
 server $pool_ip $pool_mask
@@ -404,10 +415,13 @@ rebuild() {
     local iface
     local line
 
-    if [[ ! -f /etc/openvpn/pki/certifyme.conf ]]; then
+    if [[ ! -f /etc/openvpn/pki/.cfg ]]; then
         mkdir -p /etc/openvpn/pki
-        certify -s | grep -Ps "^#\s" | grep -iv "adjust" | \
-            sed -r "s/^#\s//g" >/etc/openvpn/pki/certifyme.conf
+        cat >/etc/openvpn/pki/.cfg <<EOF
+cacn = Alpine VPN Framework CA
+cadays = 3650
+certdays = 3650
+EOF
     fi
 
     # Setup OpenVPN
@@ -557,7 +571,7 @@ stop() {
         rc-service "$service" stop
         rc-update del "$service"
         [[ -z "$teardown" ]] || rm -f "/etc/init.d/$service"
-    done < <(ls -l /etc/init.d | grep -ioPs "openvpn.\S+")
+    done < <(find /etc/init.d -name "openvpn.*" -printf "%f\n")
     unset service
 }
 
@@ -585,9 +599,9 @@ QUICK START
 1. Edit $HOME/.config/avf.conf
     - See "avf ex" for an example
 2. Setup iptables
-    - Run "iptables-restore < <(avf fw)"
-    - Optionally, modify iptables as needed
-    - Run "/etc/init.d/iptables save"
+    - Run "avf fw >/etc/iptables/rules-save"
+    - Optionally, modify as needed
+    - Run "iptables-restore </etc/iptables/rules-save"
 3. Run "avf up" to generate all VPN configs
 4. Run "avf down" to start over
 
@@ -709,11 +723,11 @@ EOF
 
 wipe() {
     # Reset Wireguard
-    rm -rf /etc/wireguard/wg*
+    rm -f -r /etc/wireguard/wg*
 
     # Reset OpenVPN
-    rm -rf /etc/openvpn/{clients,ipp,ta} /etc/openvpn/*.conf
-    certify -p /etc/openvpn/pki -w
+    rm -f -r /etc/openvpn/{clients,ipp,ta} /etc/openvpn/*.conf
+    yes | certify -e -p /etc/openvpn/pki
 }
 
 declare -a args
@@ -733,7 +747,7 @@ while [[ $# -gt 0 ]]; do
     case "$?" in
         0) ;;
         1) shift ;;
-        *) usage $? ;;
+        *) usage "$?" ;;
     esac
     shift
 done
