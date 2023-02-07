@@ -57,11 +57,6 @@ apk add bind-tools curl e2fsprogs-extra findutils grep iproute2 \
     jq libqrencode openrc openssh-server openssl openvpn sed vim \
     vimdiff wireguard-tools
 
-# Install pki for OpenVPN
-info "INSTALLING PKI TOOL"
-mkdir -p "$HOME/.local/bin"
-cp ./certify "$HOME/.local/bin"
-
 # Install obfsproxy for OpenVPN
 if [[ -n $obfs ]]; then
     subinfo "INSTALLING OBFSPROXY DEPS"

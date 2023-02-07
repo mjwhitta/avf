@@ -95,13 +95,14 @@ case "$action" in
         mkdir -p "$dir"
         [[ $(id -u) -eq 0 ]] || [[ -w $dir ]] || sudo="sudo"
         $sudo install -m 755 "$src" "$dir/$dst"
+        $sudo install -m 755 "certify" "$dir/certify"
         $sudo sed -i -e "s#INSTALL_DIR#$(pwd)#g" "$dir/$dst"
         ;;
     "uninstall")
         if [[ -f $dir/$dst ]]; then
             info "Uninstalling..."
             [[ $(id -u) -eq 0 ]] || [[ -w $dir ]] || sudo="sudo"
-            $sudo rm -f "$dir/$dst"
+            $sudo rm -f "$dir/$dst" "$dir/certify"
         else
             errx 2 "$dst is not installed in $dir"
         fi
