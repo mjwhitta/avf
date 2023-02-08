@@ -8,7 +8,8 @@ and Wireguard at this point in time.
 
 ## Setup
 
-All below steps assume you are `root` on a clean install of Alpine.
+All below steps assume you are `root` on a clean install of Alpine (1
+CPU, 128MB RAM, 8GB disk).
 
 1. Install bash and git
 

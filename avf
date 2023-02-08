@@ -49,12 +49,13 @@ example() {
   "openvpn": [
     {
       "clients": [
-        "user1"
+        "user1",
+        "user2"
       ],
-      "dns": "10.0.127.1",
+      "dns": "10.0.1.1",
       "endpoint": "vpn.your.tld",
       "iface": "eth0",
-      "pool": "10.0.127.0/255.255.255.0",
+      "pool": "10.0.1.0/255.255.255.0",
       "port": "443/tcp",
       "routes": [
         "192.168.0.0/255.255.0.0"
@@ -62,12 +63,13 @@ example() {
     },
     {
       "clients": [
-        "user1"
+        "user1",
+        "user2"
       ],
-      "dns": "10.0.128.1",
+      "dns": "10.0.2.1",
       "endpoint": "vpn.your.tld",
       "iface": "eth0",
-      "pool": "10.0.128.0/255.255.255.0",
+      "pool": "10.0.2.0/255.255.255.0",
       "port": "5353/udp",
       "routes": [
         "192.168.0.0/255.255.0.0"
@@ -78,22 +80,20 @@ example() {
     "wg0": {
       "clients": [
         {
-          "ip": "10.0.0.2",
+          "ip": "10.0.3.2",
           "name": "user1"
         },
         {
-          "ip": "10.0.0.3",
+          "ip": "10.0.3.3",
           "name": "user2"
         }
       ],
-      "dns": "10.0.0.1",
+      "dns": "10.0.3.1",
       "endpoint": "vpn.your.tld",
-      "ip": "10.0.0.1/24",
+      "ip": "10.0.3.1/24",
       "port": 443,
       "#routes": "If nothing provided, all traffic goes thru tunnel",
       "routes": [
-        "10.0.0.0/8",
-        "172.16.0.0/12",
         "192.168.0.0/16"
       ]
     }
@@ -598,11 +598,11 @@ ACTIONS
 
 QUICK START
 
-1. Edit $HOME/.config/avf.conf
+1. Create $HOME/.config/avf.conf
     - See "avf ex" for an example
 2. Setup iptables
     - Run "avf fw >/etc/iptables/rules-save"
-    - Optionally, modify as needed
+    - Optionally, modify as needed, read comments
     - Run "iptables-restore </etc/iptables/rules-save"
 3. Run "avf up" to generate all VPN configs
 4. Run "avf down" to start over
