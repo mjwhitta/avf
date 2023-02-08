@@ -134,16 +134,18 @@ gen_iptables() {
 -A FORWARD -m conntrack --ctstate DNAT,ESTABLISHED,RELATED -j ACCEPT
 # Drop invalid
 -A FORWARD -m conntrack --ctstate INVALID -j DROP
-# Reject forwarding the wrong way
--A FORWARD -i eth+ -j HARDPASS
 # Reject forwarding that is coming in and out the same interface
+-A FORWARD -i eth+ -o eth+ -j HARDPASS
 -A FORWARD -i tun+ -o tun+ -j HARDPASS
 -A FORWARD -i wg+ -o wg+ -j HARDPASS
 # Delete these next two if you're planning on using an upstream VPN
 -A FORWARD -i tun+ -o wg+ -j HARDPASS
 -A FORWARD -i wg+ -o tun+ -j HARDPASS
-# Forwarding rules for OpenVPN and Wireguard
+# Forwarding rule for use as a direct gateway
+-A FORWARD -i eth+ -j ACCEPT
+# Forwarding rule for use as an OpenVPN gateway
 -A FORWARD -i tun+ -j ACCEPT
+# Forwarding rule for use as a Wireguard gateway
 -A FORWARD -i wg+ -j ACCEPT
 # Otherwise reject
 -A FORWARD -j HARDPASS
