@@ -612,6 +612,7 @@ EOF
 }
 
 wg_gen_client() {
+    local allowed
     local config="$1"
     local cidr="$(json_get "ip" "$config")"
     local dns="$(json_get "dns" "$config")"
@@ -674,6 +675,7 @@ EOF
 
     if [[ -n $(json_get "routes" "$config") ]]; then
         file="/etc/wireguard/$iface/${name}${port}split.conf"
+        allowed="$(json_get "routes|join(\",\")" "$config")"
         cat >"$file" <<EOF
 [Interface]
 Address = $ip/32
@@ -681,7 +683,7 @@ DNS = $dns
 PrivateKey = $priv
 
 [Peer]
-AllowedIPs = $subnet,$(json_get "routes|join(\",\")" "$config")
+AllowedIPs = $subnet${allowed:+,$allowed}
 Endpoint = $server
 PersistentKeepalive = 25
 PresharedKey = $psk
