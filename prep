@@ -54,8 +54,8 @@ info "UPDATING SYSTEM"
 apk update
 apk upgrade -a -U
 apk add bind-tools curl e2fsprogs-extra findutils grep iproute2 \
-    jq libqrencode openrc openssh-server openssl openvpn sed vim \
-    vimdiff wireguard-tools
+    jq libqrencode libqrencode-tools openrc openssh-server openssl \
+    openvpn sed vim vimdiff wireguard-tools
 
 # Install obfsproxy for OpenVPN
 if [[ -n $obfs ]]; then
