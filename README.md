@@ -14,7 +14,8 @@ CPU, 128MB RAM, 8GB disk).
 1. Install bash and git
 
 ```
-$ apk add bash git
+$ apk add --update bash git
+$ exec bash
 ```
 
 2. Clone AVF

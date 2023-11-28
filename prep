@@ -47,7 +47,8 @@ done
 
 # Fix repos
 info "CONVERTING TO EDGE"
-sed -i -r -e "/cdrom|v3./d" -e "s/#//g" /etc/apk/repositories
+sed -i -r -e "/cdrom/d" -e "s/#//g" -e "s/v[0-9]\.[0-9]+/edge/g" \
+    /etc/apk/repositories
 
 # Install deps
 info "UPDATING SYSTEM"
