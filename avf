@@ -103,10 +103,6 @@ EOF
 }
 
 gen_iptables() {
-    local line
-    local port
-    local ssh="$(awk '/^#?Port\s/ {print $2}' /etc/ssh/sshd_config)"
-
     cat <<EOF
 *filter
 :INPUT DROP [0:0]
@@ -159,12 +155,20 @@ gen_iptables() {
 -A TCP -j SYNFLOOD
 # Allow TCP ports
 $(
-    unset ports
-    declare -a ports
+    unset ports ssh
+    declare -a ports ssh
 
-    # shellcheck disable=SC2030
-    [[ -z $ssh ]] || ports+=("$ssh")
+    while read -r port; do
+        ssh+=("$port")
+    done < <(
+        awk '/^\s*Port\s/ {print $2}' /etc/ssh/sshd_config{,.d/*.conf}
+    ); unset port
+
+    [[ ${#ssh[@]} -gt 0 ]] || ports+=("22")
     ports+=("53")
+    for port in "${ssh[@]}"; do
+        ports+=("$port")
+    done; unset port
 
     if [[ -n $(json_get "obfsproxy") ]]; then
         while read -r port; do
