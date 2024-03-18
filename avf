@@ -663,8 +663,8 @@ EOF
     cat >"$file" <<EOF
 [Interface]
 Address = $ip/32
-DNS = $dns
 PrivateKey = $priv
+${dns:+DNS = $dns}
 
 [Peer]
 AllowedIPs = 0.0.0.0/0
@@ -683,8 +683,8 @@ EOF
         cat >"$file" <<EOF
 [Interface]
 Address = $ip/32
-DNS = $dns
 PrivateKey = $priv
+${dns:+DNS = $dns}
 
 [Peer]
 AllowedIPs = $subnet${allowed:+,$allowed}
