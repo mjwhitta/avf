@@ -393,7 +393,7 @@ EOF
     chown -R root:root /etc/openvpn
     chmod -R u+rwX,go-rwx /etc/openvpn
 
-    ln -fs /etc/init.d/openvpn "/etc/init.d/openvpn.$srv"
+    ln -f -s /etc/init.d/openvpn "/etc/init.d/openvpn.$srv"
 }
 
 qr() {
@@ -516,32 +516,6 @@ EOF
 
     chmod 755 /etc/local.d/obfs3proxy.{start,stop}
 
-    cat >/etc/local.d/wireguard.start <<EOF
-#!/usr/bin/env bash
-
-json_get() { jq -cMrS ".\$1" "$conf" | sed -r "s/^null$//"; }
-
-if [[ -n \$(json_get "wireguard") ]]; then
-    while read -r iface; do
-        wg-quick up \$iface
-    done < <(json_get "wireguard|keys[]"); unset iface
-fi
-EOF
-
-    cat >/etc/local.d/wireguard.stop <<EOF
-#!/usr/bin/env bash
-
-json_get() { jq -cMrS ".\$1" "$conf" | sed -r "s/^null$//"; }
-
-if [[ -n \$(json_get "wireguard") ]]; then
-    while read -r iface; do
-        wg-quick down \$iface
-    done < <(json_get "wireguard|keys[]"); unset iface
-fi
-EOF
-
-    chmod 755 /etc/local.d/wireguard.{start,stop}
-
     case "$(rc-update show | grep "local")" in
         *"default"*);;
         *) rc-update add local ;;
@@ -557,6 +531,14 @@ EOF
             rc-service "openvpn.$srv" start
         done < <(json_get "openvpn[]"); unset line
     fi
+
+    # Start Wireguard services
+    if [[ -n $(json_get "wireguard") ]]; then
+        while read -r iface; do
+            rc-update add "wg-quick.$iface"
+            rc-service "wg-quick.$iface" start
+        done < <(json_get "wireguard|keys[]"); unset iface
+    fi
 }
 
 stop() {
@@ -567,7 +549,6 @@ stop() {
         *"started"*) rc-service local stop ;;
     esac
     rm -f /etc/local.d/obfs3proxy.{start,stop}
-    rm -f /etc/local.d/wireguard.{start,stop}
     case "$(rc-update show | grep "local")" in
         *"default"*) rc-service local start ;;
     esac
@@ -578,6 +559,14 @@ stop() {
         rc-update del "$service"
         [[ -z "$teardown" ]] || rm -f "/etc/init.d/$service"
     done < <(find /etc/init.d -name "openvpn.*" -printf "%f\n")
+    unset service
+
+    # Remove Wireguard services
+    while read -r service; do
+        rc-service "$service" stop
+        rc-update del "$service"
+        [[ -z "$teardown" ]] || rm -f "/etc/init.d/$service"
+    done < <(find /etc/init.d -name "wg-quick.*" -printf "%f\n")
     unset service
 }
 
@@ -727,6 +716,8 @@ EOF
 
     chown -R root:root /etc/wireguard
     chmod -R u+rwX,go-rwx /etc/wireguard
+
+    ln -s -f /etc/init.d/wg-quick "/etc/init.d/wg-quick.$iface"
 }
 
 wipe() {
