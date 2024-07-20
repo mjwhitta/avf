@@ -350,7 +350,9 @@ openvpn_gen_server() {
     mkdir -p /etc/openvpn/{dh,ipp,pki,ta}
 
     # Create DH params
-    openssl dhparam -out /etc/openvpn/dh/dh2048.pem 2048
+    if [[ ! -f /etc/openvpn/dh/dh2048.pem ]]; then
+        openssl dhparam -out /etc/openvpn/dh/dh2048.pem 2048
+    fi
 
     # Create CA
     certify -p /etc/openvpn/pki "$endpoint"
@@ -725,7 +727,7 @@ wipe() {
     rm -f -r /etc/wireguard/wg*
 
     # Reset OpenVPN
-    rm -f -r /etc/openvpn/{clients,ipp,ta} /etc/openvpn/*.conf
+    rm -f -r /etc/openvpn/{clients,dh,ipp,ta} /etc/openvpn/*.conf
     yes | certify -e -p /etc/openvpn/pki
 }
 
