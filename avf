@@ -161,7 +161,8 @@ $(
     while read -r port; do
         ssh+=("$port")
     done < <(
-        awk '/^\s*Port\s/ {print $2}' /etc/ssh/sshd_config{,.d/*.conf}
+        awk '/^\s*Port\s/ {print $2}' \
+        /etc/ssh/sshd_config{,.d/*.conf} 2>/dev/null
     ); unset port
 
     [[ ${#ssh[@]} -gt 0 ]] || ports+=("22")

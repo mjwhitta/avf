@@ -37,6 +37,9 @@ $ ./prep [--obfs]
 $ avf -h
 ```
 
+**Note:** It is important to note that OpenVPN uses the
+`255.255.255.0` syntax for netmasks, but Wireguard uses `/24`.
+
 ## Optional configuration
 
 You can modify `/etc/dnsmasq.d/default.conf` to change upstream DNS
