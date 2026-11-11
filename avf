@@ -165,6 +165,7 @@ $(
         /etc/ssh/sshd_config{,.d/*.conf} 2>/dev/null
     ); unset port
 
+    #shellcheck disable=SC2030
     [[ ${#ssh[@]} -gt 0 ]] || ports+=("22")
     ports+=("53")
     for port in "${ssh[@]}"; do
@@ -308,9 +309,6 @@ $(cat "/etc/openvpn/ta/$srv.key")
 user nobody
 verb 3
 EOF
-
-    chown -R root:root /etc/openvpn
-    chmod -R u+rwX,go-rwx /etc/openvpn
 }
 
 openvpn_gen_server() {
@@ -335,6 +333,7 @@ openvpn_gen_server() {
 
     if [[ -f /etc/openvpn/$srv.conf ]] && [[ -z $force ]]; then
         warn "Server $srv already exists. Use --force to overwrite."
+        ln -f -s /etc/init.d/openvpn "/etc/init.d/openvpn.$srv"
         return
     fi
 
@@ -392,9 +391,6 @@ topology subnet
 user nobody
 verb 3
 EOF
-
-    chown -R root:root /etc/openvpn
-    chmod -R u+rwX,go-rwx /etc/openvpn
 
     ln -f -s /etc/init.d/openvpn "/etc/init.d/openvpn.$srv"
 }
@@ -459,6 +455,9 @@ setup_openvpn() {
     while read -r client; do
         openvpn_gen_client "$client" "$config"
     done < <(json_get "clients[]" "$config"); unset client
+
+    chown -R root:root /etc/openvpn
+    chmod -R u+rwX,go-rwx /etc/openvpn
 }
 
 setup_wireguard() {
@@ -477,6 +476,9 @@ setup_wireguard() {
         name="$(json_get "name" "$client")"
         wg_gen_client "$config" "$iface" "$ip" "$name"
     done < <(json_get "clients[]" "$config"); unset client
+
+    chown -R root:root /etc/wireguard
+    chmod -R u+rwX,go-rwx /etc/wireguard
 }
 
 start() {
@@ -689,9 +691,6 @@ PublicKey = $(
 )
 EOF
     fi
-
-    chown -R root:root /etc/wireguard
-    chmod -R u+rwX,go-rwx /etc/wireguard
 }
 
 wg_gen_server() {
@@ -703,6 +702,7 @@ wg_gen_server() {
 
     if [[ -f /etc/wireguard/$iface.conf ]] && [[ -z $force ]]; then
         warn "Server $iface already exists. Use --force to overwrite."
+        ln -s -f /etc/init.d/wg-quick "/etc/init.d/wg-quick.$iface"
         return
     fi
 
@@ -716,9 +716,6 @@ Address = $ip
 ListenPort = $port
 PrivateKey = $priv
 EOF
-
-    chown -R root:root /etc/wireguard
-    chmod -R u+rwX,go-rwx /etc/wireguard
 
     ln -s -f /etc/init.d/wg-quick "/etc/init.d/wg-quick.$iface"
 }
