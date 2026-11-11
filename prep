@@ -143,9 +143,9 @@ echo "nameserver 127.0.0.1" >/etc/resolv.conf
 ## Enable iptables
 info "CONFIGURING IPTABLES"
 apk add iptables
+/etc/init.d/iptables save
 rc-update add iptables
 rc-service iptables start
-/etc/init.d/iptables save
 
 ## Create default local scripts
 info "CONFIGURING DEFAULT LOCAL.D SCRIPTS"
