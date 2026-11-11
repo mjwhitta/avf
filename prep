@@ -144,8 +144,8 @@ echo "nameserver 127.0.0.1" >/etc/resolv.conf
 info "CONFIGURING IPTABLES"
 apk add iptables
 rc-update add iptables
-/etc/init.d/iptables save
 rc-service iptables start
+/etc/init.d/iptables save
 
 ## Create default local scripts
 info "CONFIGURING DEFAULT LOCAL.D SCRIPTS"
@@ -174,8 +174,3 @@ grep -q -P -s "#\savf$" /root/.bash_profile || \
 
 ## Make config dir
 mkdir -p /root/.config
-
-# Reboot
-./installer
-good "You should reboot (some services only start on boot)"
-good "Afterwards, run \"avf -h\""

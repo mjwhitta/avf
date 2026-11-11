@@ -31,9 +31,10 @@ $ cd ./avf
 $ ./prep [--obfs]
 ```
 
-4. Reboot when requested, then read `avf` usage to setup VPNs
+4. Install `avf` then read usage to setup VPNs
 
 ```
+$ ./installer
 $ avf -h
 ```
 
