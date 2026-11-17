@@ -405,12 +405,12 @@ qr() {
 
     file="/etc/wireguard/$iface/${client}$port.conf"
     if [[ -f "$file" ]]; then
-        info "Full tunnel:"
-        qrencode -r "$file" -t ansiutf8
-    fi
-
-    file="/etc/wireguard/$iface/${client}${port}split.conf"
-    if [[ -f "$file" ]]; then
+        info "Full blocking tunnel:"
+        sed -r -e "/^Al/d" -e "s/^#(Al.+\sblocking)/\1/" "$file" | \
+            qrencode -t ansiutf8
+        info "Full non-blocking tunnel:"
+        sed -r -e "/^Al/d" -e "s/^#(Al.+non-blocking)/\1/" "$file" | \
+            qrencode -t ansiutf8
         info "Split tunnel:"
         qrencode -r "$file" -t ansiutf8
     fi
@@ -654,6 +654,10 @@ EOF
 
     mkdir -p "/etc/wireguard/$iface"
 
+    if [[ -n $(json_get "routes" "$config") ]]; then
+        allowed="$(json_get "routes|join(\",\")" "$config")"
+    fi
+
     cat >"$file" <<EOF
 [Interface]
 Address = $ip/32
@@ -661,7 +665,9 @@ PrivateKey = $priv
 ${dns:+DNS = $dns}
 
 [Peer]
-AllowedIPs = 0.0.0.0/0
+#AllowedIPs = 0.0.0.0/0 # Full blocking
+#AllowedIPs = 0.0.0.0/1,128.0.0.0/1 # Full non-blocking
+AllowedIPs = $subnet${allowed:+,$allowed} # Split
 Endpoint = $server
 PersistentKeepalive = 25
 PresharedKey = $psk
@@ -670,27 +676,6 @@ PublicKey = $(
     "/etc/wireguard/$iface.conf" | wg pubkey
 )
 EOF
-
-    if [[ -n $(json_get "routes" "$config") ]]; then
-        file="/etc/wireguard/$iface/${name}${port}split.conf"
-        allowed="$(json_get "routes|join(\",\")" "$config")"
-        cat >"$file" <<EOF
-[Interface]
-Address = $ip/32
-PrivateKey = $priv
-${dns:+DNS = $dns}
-
-[Peer]
-AllowedIPs = $subnet${allowed:+,$allowed}
-Endpoint = $server
-PersistentKeepalive = 25
-PresharedKey = $psk
-PublicKey = $(
-    grep -ioPs "PrivateKey\s*\=\s*\K.+" \
-    "/etc/wireguard/$iface.conf" | wg pubkey
-)
-EOF
-    fi
 }
 
 wg_gen_server() {
@@ -765,6 +750,7 @@ deps+=("grep")
 deps+=("jq")
 # deps+=("obfsproxy")
 deps+=("qrencode")
+deps+=("sed")
 deps+=("wg")
 deps+=("wg-quick")
 check_deps
