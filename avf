@@ -300,9 +300,14 @@ nobind
 persist-key
 persist-tun
 proto $proto
+#redirect-gateway # Full blocking
+#redirect-gateway def1 # Full non-blocking
 remote $endpoint $port
 remote-cert-tls server
 resolv-retry infinite
+#route 10.0.0.0 255.0.0.0 net_gateway # Allow LAN
+#route 172.16.0.0 255.240.0.0 net_gateway # Allow LAN
+#route 192.168.0.0 255.255.0.0 net_gateway # Allow LAN
 <tls-auth>
 $(cat "/etc/openvpn/ta/$srv.key")
 </tls-auth>
@@ -379,6 +384,7 @@ persist-tun
 port $port
 proto $proto
 ${dns:+push \"dhcp-option DNS $dns\"}
+#push "dhcp-option DOMAIN internal.example"
 $(
     for route in "${routes[@]}"; do
         echo "push \"route ${route%%/*} ${route##*/}\""
